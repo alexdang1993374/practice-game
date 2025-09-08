@@ -40,12 +40,16 @@ export default function Game() {
   const [explosions, setExplosions] = useState<Explosion[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
+  const [speedBoostTimer, setSpeedBoostTimer] = useState(0);
   const gameLoopRef = useRef<number | undefined>(undefined);
 
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
     if (gameOver) return;
     
-    const moveDistance = 20;
+    // Increase move distance if speed boost is active
+    const baseMoveDistance = 20;
+    const boostedMoveDistance = 35;
+    const moveDistance = speedBoostTimer > 0 ? boostedMoveDistance : baseMoveDistance;
     
     switch (e.key.toLowerCase()) {
       case 'w':
@@ -73,7 +77,7 @@ export default function Game() {
         break;
       }
     }
-  }, [gameOver, playerX, playerY]);
+  }, [gameOver, playerX, playerY, speedBoostTimer]);
 
   // Collision detection function
   const checkCollision = useCallback((playerX: number, playerY: number, blockX: number, blockY: number) => {
@@ -113,6 +117,9 @@ export default function Game() {
   // Game loop for moving blocks and collision detection
   const gameLoop = useCallback(() => {
     if (gameOver) return;
+
+    // Handle speed boost timer
+    setSpeedBoostTimer(prev => Math.max(0, prev - 1));
 
     // Handle explosions
     setExplosions(prevExplosions => {
@@ -168,6 +175,9 @@ export default function Game() {
               if (checkProjectileCollision(projectile.x, projectile.y, block.x, block.y)) {
                 // Create explosion effect at block position
                 createExplosion(block.x, block.y);
+                
+                // Activate speed boost (3 seconds at 60fps = 180 frames)
+                setSpeedBoostTimer(180);
                 
                 // Remove both the block and projectile
                 const blockIndex = updatedBlocks.indexOf(block);
@@ -248,6 +258,7 @@ export default function Game() {
     setBonusBlocks([]);
     setProjectiles([]);
     setExplosions([]);
+    // setSpeedBoostTimer(0);
     setGameOver(false);
     setScore(0);
   }, []);
@@ -282,6 +293,7 @@ export default function Game() {
           <p>Lives: <span className="text-red-400 font-bold">{'❤️'.repeat(Math.max(0, lives))}</span></p>
           <p>Score: <span className="text-yellow-400 font-bold">{score}</span></p>
           <p>Position: ({playerX}, {playerY})</p>
+          
           <p>Game Over: {gameOver ? 'TRUE' : 'FALSE'}</p>
         </div>
       </div>
@@ -384,7 +396,6 @@ export default function Game() {
 
         {/* Player Block */}
         <div
-          className="bg-red-500 border-4 border-yellow-400"
           style={{
             position: 'absolute',
             left: playerX + 'px',
@@ -392,12 +403,16 @@ export default function Game() {
             width: '60px',
             height: '60px',
             zIndex: 10,
-            boxShadow: '0 0 20px rgba(255, 0, 0, 0.8)',
+            backgroundColor: '#ef4444',
+            border: '4px solid ' + (speedBoostTimer > 0 ? '#00ffff' : '#facc15'),
+            boxShadow: speedBoostTimer > 0 
+              ? '0 0 20px rgba(0, 255, 255, 0.8)' 
+              : '0 0 20px rgba(255, 0, 0, 0.8)',
             transform: 'translate3d(0, 0, 0)' // Force hardware acceleration
           }}
         >
           <div className="w-full h-full bg-red-600 flex items-center justify-center text-white font-bold">
-            P
+            {speedBoostTimer > 0 ? '⚡' : 'P'}
           </div>
         </div>
       </div>
