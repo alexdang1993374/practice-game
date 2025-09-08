@@ -21,6 +21,15 @@ interface Projectile {
   speed: number;
 }
 
+interface Explosion {
+  id: string;
+  x: number;
+  y: number;
+  size: number;
+  opacity: number;
+  duration: number;
+}
+
 export default function Game() {
   const [playerX, setPlayerX] = useState(200);
   const [playerY, setPlayerY] = useState(200);
@@ -28,6 +37,7 @@ export default function Game() {
   const [movingBlocks, setMovingBlocks] = useState<MovingBlock[]>([]);
   const [bonusBlocks, setBonusBlocks] = useState<BonusBlock[]>([]);
   const [projectiles, setProjectiles] = useState<Projectile[]>([]);
+  const [explosions, setExplosions] = useState<Explosion[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
   const gameLoopRef = useRef<number | undefined>(undefined);
@@ -87,9 +97,34 @@ export default function Game() {
            projY + projectileSize > blockY;
   }, []);
 
+  // Create explosion effect
+  const createExplosion = useCallback((x: number, y: number) => {
+    const newExplosion: Explosion = {
+      id: Date.now().toString() + '_explosion',
+      x: x + 20, // Center on block
+      y: y + 20,
+      size: 0,
+      opacity: 1,
+      duration: 30 // frames
+    };
+    setExplosions(prev => [...prev, newExplosion]);
+  }, []);
+
   // Game loop for moving blocks and collision detection
   const gameLoop = useCallback(() => {
     if (gameOver) return;
+
+    // Handle explosions
+    setExplosions(prevExplosions => {
+      return prevExplosions
+        .map(explosion => ({
+          ...explosion,
+          size: explosion.size + 3, // Grow explosion
+          opacity: explosion.opacity - (1 / explosion.duration), // Fade out
+          duration: explosion.duration - 1
+        }))
+        .filter(explosion => explosion.duration > 0); // Remove finished explosions
+    });
 
     // Handle projectiles
     setProjectiles(prevProjectiles => {
@@ -124,30 +159,33 @@ export default function Game() {
         }
       });
 
-      // Check projectile collisions with dangerous blocks
-      setProjectiles(prevProjectiles => {
-        const updatedProjectiles = [...prevProjectiles];
-        
-        updatedBlocks.forEach(block => {
-          updatedProjectiles.forEach(projectile => {
-            if (checkProjectileCollision(projectile.x, projectile.y, block.x, block.y)) {
-              // Remove both the block and projectile
-              const blockIndex = updatedBlocks.indexOf(block);
-              const projIndex = updatedProjectiles.indexOf(projectile);
-              
-              if (blockIndex > -1) {
-                updatedBlocks.splice(blockIndex, 1);
-                setScore(prevScore => prevScore + 100); // Bonus points for destroying block
+        // Check projectile collisions with dangerous blocks
+        setProjectiles(prevProjectiles => {
+          const updatedProjectiles = [...prevProjectiles];
+          
+          updatedBlocks.forEach(block => {
+            updatedProjectiles.forEach(projectile => {
+              if (checkProjectileCollision(projectile.x, projectile.y, block.x, block.y)) {
+                // Create explosion effect at block position
+                createExplosion(block.x, block.y);
+                
+                // Remove both the block and projectile
+                const blockIndex = updatedBlocks.indexOf(block);
+                const projIndex = updatedProjectiles.indexOf(projectile);
+                
+                if (blockIndex > -1) {
+                  updatedBlocks.splice(blockIndex, 1);
+                  setScore(prevScore => prevScore + 100); // Bonus points for destroying block
+                }
+                if (projIndex > -1) {
+                  updatedProjectiles.splice(projIndex, 1);
+                }
               }
-              if (projIndex > -1) {
-                updatedProjectiles.splice(projIndex, 1);
-              }
-            }
+            });
           });
+          
+          return updatedProjectiles;
         });
-        
-        return updatedProjectiles;
-      });
 
       return updatedBlocks;
     });
@@ -199,7 +237,7 @@ export default function Game() {
     }
 
     gameLoopRef.current = requestAnimationFrame(gameLoop);
-  }, [gameOver, playerX, playerY, checkCollision, checkProjectileCollision]);
+  }, [gameOver, playerX, playerY, checkCollision, checkProjectileCollision, createExplosion]);
 
   // Restart game function
   const restartGame = useCallback(() => {
@@ -209,6 +247,7 @@ export default function Game() {
     setMovingBlocks([]);
     setBonusBlocks([]);
     setProjectiles([]);
+    setExplosions([]);
     setGameOver(false);
     setScore(0);
   }, []);
@@ -257,9 +296,9 @@ export default function Game() {
         }}
       >
         {/* Dangerous Moving Blocks */}
-        {movingBlocks.map(block => (
+        {movingBlocks.map((block, index) => (
           <div
-            key={block.id}
+            key={block.id + index}
             className="bg-purple-600 border-2 border-purple-400"
             style={{
               position: 'absolute',
@@ -274,9 +313,9 @@ export default function Game() {
         ))}
 
         {/* Bonus Blocks */}
-        {bonusBlocks.map(block => (
+        {bonusBlocks.map((block, index) => (
           <div
-            key={block.id}
+          key={block.id + index}
             style={{
               position: 'absolute',
               left: block.x + 'px',
@@ -306,9 +345,9 @@ export default function Game() {
         ))}
 
         {/* Projectiles */}
-        {projectiles.map(projectile => (
+        {projectiles.map((projectile, index) => (
           <div
-            key={projectile.id}
+            key={projectile.id + index}
             style={{
               position: 'absolute',
               left: projectile.x + 'px',
@@ -319,6 +358,26 @@ export default function Game() {
               backgroundColor: '#fbbf24',
               borderRadius: '50%',
               boxShadow: '0 0 8px rgba(251, 191, 36, 0.8)'
+            }}
+          />
+        ))}
+
+        {/* Explosions */}
+        {explosions.map((explosion, index) => (
+          <div
+            key={explosion.id + index}
+            style={{
+              position: 'absolute',
+              left: (explosion.x - explosion.size / 2) + 'px',
+              top: (explosion.y - explosion.size / 2) + 'px',
+              width: explosion.size + 'px',
+              height: explosion.size + 'px',
+              zIndex: 15,
+              borderRadius: '50%',
+              background: `radial-gradient(circle, #ff4444 0%, #ff8800 40%, #ffaa00 70%, transparent 100%)`,
+              opacity: explosion.opacity,
+              pointerEvents: 'none',
+              boxShadow: `0 0 ${explosion.size}px rgba(255, 68, 68, ${explosion.opacity * 0.8})`
             }}
           />
         ))}
