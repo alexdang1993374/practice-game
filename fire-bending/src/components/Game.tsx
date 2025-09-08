@@ -7,11 +7,19 @@ interface MovingBlock {
   speed: number;
 }
 
+interface BonusBlock {
+  id: string;
+  x: number;
+  y: number;
+  speed: number;
+}
+
 export default function Game() {
   const [playerX, setPlayerX] = useState(200);
   const [playerY, setPlayerY] = useState(200);
   const [lives, setLives] = useState(3);
   const [movingBlocks, setMovingBlocks] = useState<MovingBlock[]>([]);
+  const [bonusBlocks, setBonusBlocks] = useState<BonusBlock[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
   const gameLoopRef = useRef<number | undefined>(undefined);
@@ -52,12 +60,13 @@ export default function Game() {
   const gameLoop = useCallback(() => {
     if (gameOver) return;
 
+    // Handle dangerous blocks
     setMovingBlocks(prevBlocks => {
       const updatedBlocks = prevBlocks
         .map(block => ({ ...block, x: block.x - block.speed }))
         .filter(block => block.x > -40); // Remove blocks that move off screen
 
-      // Check collisions
+      // Check collisions with dangerous blocks
       updatedBlocks.forEach(block => {
         if (checkCollision(playerX, playerY, block.x, block.y)) {
           setLives(prevLives => {
@@ -78,10 +87,31 @@ export default function Game() {
       return updatedBlocks;
     });
 
+    // Handle bonus blocks
+    setBonusBlocks(prevBlocks => {
+      const updatedBlocks = prevBlocks
+        .map(block => ({ ...block, x: block.x - block.speed }))
+        .filter(block => block.x > -40); // Remove blocks that move off screen
+
+      // Check collisions with bonus blocks
+      updatedBlocks.forEach(block => {
+        if (checkCollision(playerX, playerY, block.x, block.y)) {
+          setScore(prevScore => prevScore + 500); // Add 500 points
+          // Remove the collected bonus block
+          const blockIndex = updatedBlocks.indexOf(block);
+          if (blockIndex > -1) {
+            updatedBlocks.splice(blockIndex, 1);
+          }
+        }
+      });
+
+      return updatedBlocks;
+    });
+
     // Increment score
     setScore(prev => prev + 1);
 
-    // Spawn new moving block occasionally
+    // Spawn new dangerous block occasionally
     if (Math.random() < 0.02) { // 2% chance each frame
       const newBlock: MovingBlock = {
         id: Date.now().toString(),
@@ -90,6 +120,17 @@ export default function Game() {
         speed: 2 + Math.random() * 3 // Speed between 2-5
       };
       setMovingBlocks(prev => [...prev, newBlock]);
+    }
+
+    // Spawn new bonus block occasionally (less frequent)
+    if (Math.random() < 0.005) { // 0.5% chance each frame
+      const newBonusBlock: BonusBlock = {
+        id: Date.now().toString() + '_bonus',
+        x: 800, // Start from right edge
+        y: Math.random() * 560, // Random Y position
+        speed: 1.5 + Math.random() * 2 // Slightly slower than dangerous blocks
+      };
+      setBonusBlocks(prev => [...prev, newBonusBlock]);
     }
 
     gameLoopRef.current = requestAnimationFrame(gameLoop);
@@ -101,6 +142,7 @@ export default function Game() {
     setPlayerY(200);
     setLives(3);
     setMovingBlocks([]);
+    setBonusBlocks([]);
     setGameOver(false);
     setScore(0);
   }, []);
@@ -148,7 +190,7 @@ export default function Game() {
           border: '4px solid #16a34a',
         }}
       >
-        {/* Moving Blocks */}
+        {/* Dangerous Moving Blocks */}
         {movingBlocks.map(block => (
           <div
             key={block.id}
@@ -163,6 +205,38 @@ export default function Game() {
               backgroundColor: '#000000',
             }}
           />
+        ))}
+
+        {/* Bonus Blocks */}
+        {bonusBlocks.map(block => (
+          <div
+            key={block.id}
+            style={{
+              position: 'absolute',
+              left: block.x + 'px',
+              top: block.y + 'px',
+              width: '40px',
+              height: '40px',
+              zIndex: 5,
+              backgroundColor: '#22c55e',
+              border: '2px solid #16a34a',
+              borderRadius: '4px',
+              boxShadow: '0 0 10px rgba(34, 197, 94, 0.6)'
+            }}
+          >
+            <div style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontWeight: 'bold',
+              fontSize: '20px'
+            }}>
+              +
+            </div>
+          </div>
         ))}
 
         {/* Player Block */}
