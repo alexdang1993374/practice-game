@@ -14,12 +14,20 @@ interface BonusBlock {
   speed: number;
 }
 
+interface Projectile {
+  id: string;
+  x: number;
+  y: number;
+  speed: number;
+}
+
 export default function Game() {
   const [playerX, setPlayerX] = useState(200);
   const [playerY, setPlayerY] = useState(200);
   const [lives, setLives] = useState(3);
   const [movingBlocks, setMovingBlocks] = useState<MovingBlock[]>([]);
   const [bonusBlocks, setBonusBlocks] = useState<BonusBlock[]>([]);
+  const [projectiles, setProjectiles] = useState<Projectile[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
   const gameLoopRef = useRef<number | undefined>(undefined);
@@ -42,8 +50,20 @@ export default function Game() {
       case 'd':
         setPlayerX(prev => Math.min(740, prev + moveDistance)); // 800 - 60 (player width)
         break;
+      case ' ': {
+        // Shoot projectile
+        const newProjectile: Projectile = {
+          id: Date.now().toString() + '_projectile',
+          x: playerX + 60, // Start from right edge of player
+          y: playerY + 25, // Center vertically on player
+          speed: 8
+        };
+        setProjectiles(prev => [...prev, newProjectile]);
+        e.preventDefault(); // Prevent page scroll
+        break;
+      }
     }
-  }, [gameOver]);
+  }, [gameOver, playerX, playerY]);
 
   // Collision detection function
   const checkCollision = useCallback((playerX: number, playerY: number, blockX: number, blockY: number) => {
@@ -56,9 +76,29 @@ export default function Game() {
            playerY + playerSize > blockY;
   }, []);
 
+  // Projectile collision detection function
+  const checkProjectileCollision = useCallback((projX: number, projY: number, blockX: number, blockY: number) => {
+    const projectileSize = 10;
+    const blockSize = 40;
+    
+    return projX < blockX + blockSize &&
+           projX + projectileSize > blockX &&
+           projY < blockY + blockSize &&
+           projY + projectileSize > blockY;
+  }, []);
+
   // Game loop for moving blocks and collision detection
   const gameLoop = useCallback(() => {
     if (gameOver) return;
+
+    // Handle projectiles
+    setProjectiles(prevProjectiles => {
+      const updatedProjectiles = prevProjectiles
+        .map(projectile => ({ ...projectile, x: projectile.x + projectile.speed }))
+        .filter(projectile => projectile.x < 850); // Remove projectiles that move off screen
+
+      return updatedProjectiles;
+    });
 
     // Handle dangerous blocks
     setMovingBlocks(prevBlocks => {
@@ -66,7 +106,7 @@ export default function Game() {
         .map(block => ({ ...block, x: block.x - block.speed }))
         .filter(block => block.x > -40); // Remove blocks that move off screen
 
-      // Check collisions with dangerous blocks
+      // Check collisions with player
       updatedBlocks.forEach(block => {
         if (checkCollision(playerX, playerY, block.x, block.y)) {
           setLives(prevLives => {
@@ -82,6 +122,31 @@ export default function Game() {
             updatedBlocks.splice(blockIndex, 1);
           }
         }
+      });
+
+      // Check projectile collisions with dangerous blocks
+      setProjectiles(prevProjectiles => {
+        const updatedProjectiles = [...prevProjectiles];
+        
+        updatedBlocks.forEach(block => {
+          updatedProjectiles.forEach(projectile => {
+            if (checkProjectileCollision(projectile.x, projectile.y, block.x, block.y)) {
+              // Remove both the block and projectile
+              const blockIndex = updatedBlocks.indexOf(block);
+              const projIndex = updatedProjectiles.indexOf(projectile);
+              
+              if (blockIndex > -1) {
+                updatedBlocks.splice(blockIndex, 1);
+                setScore(prevScore => prevScore + 100); // Bonus points for destroying block
+              }
+              if (projIndex > -1) {
+                updatedProjectiles.splice(projIndex, 1);
+              }
+            }
+          });
+        });
+        
+        return updatedProjectiles;
       });
 
       return updatedBlocks;
@@ -134,7 +199,7 @@ export default function Game() {
     }
 
     gameLoopRef.current = requestAnimationFrame(gameLoop);
-  }, [gameOver, playerX, playerY, checkCollision]);
+  }, [gameOver, playerX, playerY, checkCollision, checkProjectileCollision]);
 
   // Restart game function
   const restartGame = useCallback(() => {
@@ -143,6 +208,7 @@ export default function Game() {
     setLives(3);
     setMovingBlocks([]);
     setBonusBlocks([]);
+    setProjectiles([]);
     setGameOver(false);
     setScore(0);
   }, []);
@@ -172,7 +238,7 @@ export default function Game() {
       <h1 className="text-4xl font-bold text-orange-400 mb-4">Simple Game</h1>
       
       <div className="mb-4 text-white text-center">
-        <p>Move with WASD keys</p>
+        <p>Move: WASD | Shoot: SPACE</p>
         <div className="flex gap-8 justify-center items-center">
           <p>Lives: <span className="text-red-400 font-bold">{'❤️'.repeat(Math.max(0, lives))}</span></p>
           <p>Score: <span className="text-yellow-400 font-bold">{score}</span></p>
@@ -237,6 +303,24 @@ export default function Game() {
               +
             </div>
           </div>
+        ))}
+
+        {/* Projectiles */}
+        {projectiles.map(projectile => (
+          <div
+            key={projectile.id}
+            style={{
+              position: 'absolute',
+              left: projectile.x + 'px',
+              top: projectile.y + 'px',
+              width: '10px',
+              height: '10px',
+              zIndex: 6,
+              backgroundColor: '#fbbf24',
+              borderRadius: '50%',
+              boxShadow: '0 0 8px rgba(251, 191, 36, 0.8)'
+            }}
+          />
         ))}
 
         {/* Player Block */}
