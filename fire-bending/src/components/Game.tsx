@@ -46,10 +46,10 @@ export default function Game() {
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
     if (gameOver) return;
     
-    // Increase move distance if speed boost is active
+    // Calculate move distance based on speed boost value
     const baseMoveDistance = 20;
-    const boostedMoveDistance = 35;
-    const moveDistance = speedBoostTimer > 0 ? boostedMoveDistance : baseMoveDistance;
+    const boostMultiplier = Math.min(speedBoostTimer / 1000, 3); // Max 3x boost, each 1000 timer = 1x boost
+    const moveDistance = baseMoveDistance + (baseMoveDistance * boostMultiplier);
     
     switch (e.key.toLowerCase()) {
       case 'w':
@@ -118,8 +118,8 @@ export default function Game() {
   const gameLoop = useCallback(() => {
     if (gameOver) return;
 
-    // Handle speed boost timer
-    setSpeedBoostTimer(prev => Math.max(0, prev - 1));
+    // Handle speed boost timer (decay over time)
+    setSpeedBoostTimer(prev => Math.max(0, prev - 5)); // Decays by 5 per frame
 
     // Handle explosions
     setExplosions(prevExplosions => {
@@ -176,8 +176,8 @@ export default function Game() {
                 // Create explosion effect at block position
                 createExplosion(block.x, block.y);
                 
-                // Activate speed boost (3 seconds at 60fps = 180 frames)
-                setSpeedBoostTimer(180);
+                // Add to speed boost (additive system)
+                setSpeedBoostTimer(prev => prev + 1000);
                 
                 // Remove both the block and projectile
                 const blockIndex = updatedBlocks.indexOf(block);
@@ -258,7 +258,7 @@ export default function Game() {
     setBonusBlocks([]);
     setProjectiles([]);
     setExplosions([]);
-    // setSpeedBoostTimer(0);
+    setSpeedBoostTimer(0);
     setGameOver(false);
     setScore(0);
   }, []);
@@ -293,7 +293,11 @@ export default function Game() {
           <p>Lives: <span className="text-red-400 font-bold">{'❤️'.repeat(Math.max(0, lives))}</span></p>
           <p>Score: <span className="text-yellow-400 font-bold">{score}</span></p>
           <p>Position: ({playerX}, {playerY})</p>
-          
+          {speedBoostTimer > 0 && (
+            <p className="text-cyan-400 font-bold">
+              ⚡ BOOST: {Math.min(Math.floor(speedBoostTimer / 1000) + 1, 4)}x ({Math.ceil(speedBoostTimer / 300)}s)
+            </p>
+          )}
           <p>Game Over: {gameOver ? 'TRUE' : 'FALSE'}</p>
         </div>
       </div>
